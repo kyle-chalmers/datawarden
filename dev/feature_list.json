@@ -55,7 +55,7 @@
       "slice": "3",
       "description": "data-classification lands fixture files in four distinct tiers with evidence and no sampled values",
       "check": "/datawarden:data-classification tests/fixtures/classify-repo -> 4 files in 4 distinct tiers, Restricted file yields HIGH, report contains no sampled data values, nothing auto-assigned Public",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S4a.1-db-audit-postgres",

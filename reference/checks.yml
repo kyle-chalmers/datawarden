@@ -66,6 +66,24 @@
       "title": "Consumer retention/training tier is not locally auditable (always UNKNOWN)",
       "citations": ["claude-data-usage"],
       "fixtures": ["ai-config"]
+    },
+    "DC-01": {
+      "skill": "data-classification",
+      "title": "Validated Restricted-tier content on disk (SSN/PAN validators fired)",
+      "citations": ["nist-sp800-122", "owasp-llm02"],
+      "fixtures": ["classify-repo"]
+    },
+    "DC-02": {
+      "skill": "data-classification",
+      "title": "Confidential-tier content on disk (validated emails or PII columns)",
+      "citations": ["nist-sp800-122", "owasp-llm02"],
+      "fixtures": ["classify-repo"]
+    },
+    "DC-03": {
+      "skill": "data-classification",
+      "title": "Classification could not run over part of the target (unreadable content)",
+      "citations": ["nist-sp800-122"],
+      "fixtures": ["manual-unreadable-target"]
     }
   }
 }

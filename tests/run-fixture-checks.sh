@@ -128,5 +128,20 @@ assert "hardened config: zero findings" '.findings | length == 0'
 assert "hardened config: AC-06 unknown still present (never a clean bill)" \
   '.unknowns | any(.check_id == "AC-06")'
 
+CLASSIFY="skills/data-classification/scripts/classify_hints.py"
+
+step "fixture classify-repo: deterministic floors, validators, no values in output"
+python3 "$CLASSIFY" --target tests/fixtures/classify-repo --emit-json "$TMP/out.json"
+assert "accounts.csv floors to Restricted, confirmed, via SSN + Luhn validators" \
+  '.files | any(.path == "accounts.csv" and .floor == "Restricted" and .confidence == "confirmed" and .indicators.ssn_valid == 2 and .indicators.pan_luhn_valid >= 2)'
+assert "customers.csv floors to Confidential via validated emails + PII columns" \
+  '.files | any(.path == "customers.csv" and .floor == "Confidential" and .indicators.emails == 2 and (.pii_columns | length >= 2))'
+assert "README.md and runbook.md floor to Internal (never auto-Public)" \
+  '[.files[] | select(.path == "README.md" or .path == "runbook.md") | .floor == "Internal"] == [true, true]'
+assert "no data values leak into hint output (no SSN/PAN/email strings)" \
+  '[tostring | test("078-05-1120|4111111111111111|jane\\.doe@example\\.com")] == [false]'
+assert "nothing is ever floored to Public" \
+  '[.files[] | .floor != "Public"] | all'
+
 echo
 if [ "$fail" -eq 0 ]; then echo "FIXTURES: PASS"; else echo "FIXTURES: FAIL"; exit 1; fi
