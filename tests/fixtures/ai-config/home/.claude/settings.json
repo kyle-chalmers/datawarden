@@ -1,0 +1,4 @@
+{
+  "$comment": "FIXTURE — user-scope settings for the ai-config home fixture.",
+  "cleanupPeriodDays": 30
+}

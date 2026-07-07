@@ -48,7 +48,7 @@
       "slice": "2",
       "description": "ai-config-audit produces the expected findings on the ai-config fixture",
       "check": "/datawarden:ai-config-audit tests/fixtures/ai-config -> findings: 3 missing secret deny rules, dangerous env-runner allow rule, inline MCP credential, transcript-retention INFO, consumer-retention UNKNOWN with manual-check instructions; deterministic verdicts from scripts/permeval.py",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S3.1-data-classification",

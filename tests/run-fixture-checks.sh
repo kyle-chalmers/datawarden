@@ -97,5 +97,36 @@ run_eval "$REPO"
 assert "suppressed finding is in the appendix, not findings" \
   '(.findings | map(.check_id) | index("SS-03")) == null and (.suppressed | length == 1)'
 
+PERMEVAL="skills/ai-config-audit/scripts/permeval.py"
+
+step "fixture ai-config: AC-01..AC-05 findings + AC-06 unknown"
+python3 "$PERMEVAL" --target tests/fixtures/ai-config \
+  --home tests/fixtures/ai-config/home --emit-json "$TMP/out.json"
+assert "AC-01: all 3 recommended deny rules reported missing" \
+  '.findings | any(.check_id == "AC-01" and (.title | test("Missing 3")) and .severity == "HIGH")'
+assert "AC-02: Bash(npx *) flagged as env-runner allow" \
+  '.findings | any(.check_id == "AC-02" and (.title | test("npx")) and .severity == "HIGH")'
+assert "AC-03: credential-shaped MCP env key flagged by name" \
+  '.findings | any(.check_id == "AC-03" and (.evidence | test("WAREHOUSE_PASSWORD")))'
+assert "AC-03: the placeholder value itself never appears in output" \
+  '[tostring | test("placeholder-not-a-real-value")] == [false]'
+assert "AC-04: gemini trust:true flagged" \
+  '.findings | any(.check_id == "AC-04" and (.file | test("gemini")))'
+assert "AC-05: transcript INFO present" \
+  '.findings | any(.check_id == "AC-05" and .severity == "INFO")'
+assert "AC-06: retention always reported UNKNOWN with manual-check action" \
+  '.unknowns | any(.check_id == "AC-06" and (.action | test("data-privacy-controls")))'
+assert "every ai-config finding carries a citation and fingerprint" \
+  '[.findings[] | (.citations | length > 0) and (.fingerprint | length > 0)] | all'
+
+step "fixture ai-config-hardened: false-positive guard"
+HARDHOME="$TMP/empty-home"
+mkdir -p "$HARDHOME"
+python3 "$PERMEVAL" --target tests/fixtures/ai-config-hardened \
+  --home "$HARDHOME" --emit-json "$TMP/out.json"
+assert "hardened config: zero findings" '.findings | length == 0'
+assert "hardened config: AC-06 unknown still present (never a clean bill)" \
+  '.unknowns | any(.check_id == "AC-06")'
+
 echo
 if [ "$fail" -eq 0 ]; then echo "FIXTURES: PASS"; else echo "FIXTURES: FAIL"; exit 1; fi

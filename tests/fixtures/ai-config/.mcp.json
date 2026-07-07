@@ -1,0 +1,12 @@
+{
+  "$comment": "FIXTURE — MCP config with a credential-shaped literal (AC-03). The value is an inert placeholder; detection is by key name, never by value.",
+  "mcpServers": {
+    "warehouse": {
+      "command": "npx",
+      "args": ["-y", "@example/warehouse-mcp"],
+      "env": {
+        "WAREHOUSE_PASSWORD": "placeholder-not-a-real-value"
+      }
+    }
+  }
+}

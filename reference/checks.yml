@@ -30,6 +30,42 @@
       "title": "Secrets scan could not run (gitleaks unavailable or scan error)",
       "citations": ["owasp-llm02"],
       "fixtures": ["manual-uninstalled-tool"]
+    },
+    "AC-01": {
+      "skill": "ai-config-audit",
+      "title": "Missing recommended secret deny rules in project Claude settings",
+      "citations": ["claude-code-security", "owasp-llm02"],
+      "fixtures": ["ai-config", "ai-config-hardened"]
+    },
+    "AC-02": {
+      "skill": "ai-config-audit",
+      "title": "Allow rule grants arbitrary execution via an env-runner wildcard",
+      "citations": ["owasp-llm06", "claude-code-security"],
+      "fixtures": ["ai-config", "ai-config-hardened"]
+    },
+    "AC-03": {
+      "skill": "ai-config-audit",
+      "title": "Credential-shaped literal value in an MCP server config",
+      "citations": ["owasp-llm02", "mcp-sbp-scope-minimization"],
+      "fixtures": ["ai-config"]
+    },
+    "AC-04": {
+      "skill": "ai-config-audit",
+      "title": "MCP server configured with trust:true (bypasses tool-call confirmations)",
+      "citations": ["owasp-llm06", "mcp-sbp-confused-deputy"],
+      "fixtures": ["ai-config"]
+    },
+    "AC-05": {
+      "skill": "ai-config-audit",
+      "title": "Plaintext session transcripts on disk",
+      "citations": ["claude-data-usage"],
+      "fixtures": ["ai-config"]
+    },
+    "AC-06": {
+      "skill": "ai-config-audit",
+      "title": "Consumer retention/training tier is not locally auditable (always UNKNOWN)",
+      "citations": ["claude-data-usage"],
+      "fixtures": ["ai-config"]
     }
   }
 }
