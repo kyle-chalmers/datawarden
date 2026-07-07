@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Test-time generated fixtures — secret-shaped content is never committed
+tests/fixtures/generated/
+
+# Local, per-user config (bring-your-own-connection defaults, etc.)
+datawarden.local.md
+.claude/settings.local.json

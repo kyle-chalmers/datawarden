@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "datawarden",
+  "displayName": "DataWarden",
+  "description": "Data + AI security audits for data professionals — cited, severity-ranked findings for AI tool configs, secrets exposure, data classification, and warehouse access.",
+  "author": { "name": "Kyle Chalmers" },
+  "repository": "https://github.com/kyle-chalmers/datawarden",
+  "license": "MIT",
+  "keywords": ["security", "data", "ai-security", "pii", "secrets", "audit", "data-warehouse"]
+}

@@ -1,0 +1,89 @@
+{
+  "$comment": "IMMUTABLE feature list for the datawarden v1 build (see SPEC.md). Do not add, remove, reword, or reorder features. The ONLY field a work session may change is `passes` (false -> true, after the check is demonstrated, never asserted). Log evidence in dev/progress.txt.",
+  "features": [
+    {
+      "id": "S0.1-plugin-validates",
+      "slice": "0",
+      "description": "Plugin skeleton passes validation",
+      "check": "claude plugin validate . exits 0 with no errors (--strict deferred to first public release, when semver is added; --strict escalates the intentional no-version-field choice into an error)",
+      "passes": true
+    },
+    {
+      "id": "S0.2-plugin-loads",
+      "slice": "0",
+      "description": "Plugin loads from a local dir and exposes its skills",
+      "check": "claude --plugin-dir . loads without error and lists datawarden skills",
+      "passes": true
+    },
+    {
+      "id": "S0.3-fork-orchestration",
+      "slice": "0",
+      "description": "Orchestrator skill invokes a context:fork worker skill and receives its return",
+      "check": "/datawarden:security-audit (stub) invokes the forked ai-config-audit stub and echoes DATAWARDEN-STUB lines for both skills",
+      "passes": true
+    },
+    {
+      "id": "S1.1-shared-contracts",
+      "slice": "1",
+      "description": "Shared finding schema, citations registry, and check map exist and are consistent",
+      "check": "reference/finding-format.md, reference/citations.yml, reference/checks.yml exist; every checks.yml entry references only citation keys present in citations.yml and at least one fixture id; validated by dev/validate.sh",
+      "passes": false
+    },
+    {
+      "id": "S1.2-secrets-scanner",
+      "slice": "1",
+      "description": "secrets-scanner produces exactly the expected, citation-conformant findings on the generated fixture",
+      "check": "tests/fixtures/make-secrets-repo.sh && /datawarden:secrets-scanner <generated repo> -> 1 history-only HIGH + 1 worktree .env CRITICAL (no deny rule), each finding conformant to finding-format.md with a citations.yml citation",
+      "passes": false
+    },
+    {
+      "id": "S1.3-ci-bootstrap",
+      "slice": "1",
+      "description": "CI runs deterministic checks including gitleaks self-scan of tree and full history",
+      "check": ".github/workflows/ci.yml green on push: plugin validation (or jq fallback), shellcheck, gitleaks self-scan",
+      "passes": false
+    },
+    {
+      "id": "S2.1-ai-config-audit",
+      "slice": "2",
+      "description": "ai-config-audit produces the expected findings on the ai-config fixture",
+      "check": "/datawarden:ai-config-audit tests/fixtures/ai-config -> findings: 3 missing secret deny rules, dangerous env-runner allow rule, inline MCP credential, transcript-retention INFO, consumer-retention UNKNOWN with manual-check instructions; deterministic verdicts from scripts/permeval.py",
+      "passes": false
+    },
+    {
+      "id": "S3.1-data-classification",
+      "slice": "3",
+      "description": "data-classification lands fixture files in four distinct tiers with evidence and no sampled values",
+      "check": "/datawarden:data-classification tests/fixtures/classify-repo -> 4 files in 4 distinct tiers, Restricted file yields HIGH, report contains no sampled data values, nothing auto-assigned Public",
+      "passes": false
+    },
+    {
+      "id": "S4a.1-db-audit-postgres",
+      "slice": "4a",
+      "description": "db-access-audit Postgres pack verified against dockerized fixture; human gate works",
+      "check": "docker Postgres + tests/fixtures/postgres/init.sql; every skills/db-access-audit/sql/postgres/*.sql output diffs clean against tests/fixtures/postgres/expected/; skill shows connection target + SQL and waits for confirmation before executing; reports over-broad grant, PII columns, no masked views, no audit logging",
+      "passes": false
+    },
+    {
+      "id": "S4b.1-db-audit-snowflake",
+      "slice": "4b",
+      "description": "db-access-audit Snowflake pack interprets recorded fixtures into expected findings",
+      "check": "skill maps tests/fixtures/snowflake/ recorded outputs to the findings in tests/fixtures/snowflake/expected_findings.md without a live account; CI lint proves zero mutating statements in both SQL packs",
+      "passes": false
+    },
+    {
+      "id": "S5.1-orchestrator",
+      "slice": "5",
+      "description": "security-audit orchestrator produces one merged, deduped, cited report end-to-end",
+      "check": "/datawarden:security-audit over combined fixtures -> single report with all 4 sub-audit sections, deduplicated .env finding, Top-5 actions ordered severity-first with rotate-pushed-secrets override, every finding cited",
+      "passes": false
+    },
+    {
+      "id": "S6.1-ship-polish",
+      "slice": "6",
+      "description": "README/SECURITY/CONTRIBUTING complete; real install path works; repo provably clean",
+      "check": "claude plugin marketplace add kyle-chalmers/datawarden && claude plugin install datawarden@datawarden succeeds from a clean checkout; gitleaks tree+history self-scan clean; CI green",
+      "passes": false
+    }
+  ]
+}
