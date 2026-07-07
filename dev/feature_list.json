@@ -41,7 +41,7 @@
       "slice": "1",
       "description": "CI runs deterministic checks including gitleaks self-scan of tree and full history",
       "check": ".github/workflows/ci.yml green on push: plugin validation (or jq fallback), shellcheck, gitleaks self-scan",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S2.1-ai-config-audit",
