@@ -1,0 +1,35 @@
+{
+  "$comment": "Registry mapping every datawarden check to its citations and the fixture(s) proving it fires. CI fails a check that lacks a citation key present in citations.yml or a fixture id. Fixture ids beginning with 'manual-' are procedure-documented checks that cannot run in CI (documented in the owning skill's reference.md). This file is JSON written in a .yml file so jq can validate it with zero dependencies (JSON is a subset of YAML).",
+  "checks": {
+    "SS-01": {
+      "skill": "secrets-scanner",
+      "title": "Secret present in git history (local only)",
+      "citations": ["owasp-llm02"],
+      "fixtures": ["secrets-generated"]
+    },
+    "SS-02": {
+      "skill": "secrets-scanner",
+      "title": "Secret on disk, covered by a permission deny rule (still readable by subprocesses)",
+      "citations": ["owasp-llm02", "claude-code-security"],
+      "fixtures": ["secrets-generated-denied"]
+    },
+    "SS-03": {
+      "skill": "secrets-scanner",
+      "title": "Secret on disk and agent-readable (no permission deny rule covers it)",
+      "citations": ["owasp-llm02", "claude-code-security"],
+      "fixtures": ["secrets-generated"]
+    },
+    "SS-04": {
+      "skill": "secrets-scanner",
+      "title": "Secret pushed to a git remote (rotate first)",
+      "citations": ["owasp-llm02"],
+      "fixtures": ["secrets-generated-remote"]
+    },
+    "SS-05": {
+      "skill": "secrets-scanner",
+      "title": "Secrets scan could not run (gitleaks unavailable or scan error)",
+      "citations": ["owasp-llm02"],
+      "fixtures": ["manual-uninstalled-tool"]
+    }
+  }
+}

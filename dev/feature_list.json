@@ -27,14 +27,14 @@
       "slice": "1",
       "description": "Shared finding schema, citations registry, and check map exist and are consistent",
       "check": "reference/finding-format.md, reference/citations.yml, reference/checks.yml exist; every checks.yml entry references only citation keys present in citations.yml and at least one fixture id; validated by dev/validate.sh",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S1.2-secrets-scanner",
       "slice": "1",
       "description": "secrets-scanner produces exactly the expected, citation-conformant findings on the generated fixture",
       "check": "tests/fixtures/make-secrets-repo.sh && /datawarden:secrets-scanner <generated repo> -> 1 history-only HIGH + 1 worktree .env CRITICAL (no deny rule), each finding conformant to finding-format.md with a citations.yml citation",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S1.3-ci-bootstrap",
