@@ -30,10 +30,22 @@ SEVERITY_ORDER = ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
 CONFIDENCE_CAP = {"possible": "MEDIUM", "probable": "HIGH", "confirmed": "CRITICAL"}
 
 
+# Column sets each query output must have; a present-but-malformed CSV (missing/renamed
+# column) is failed closed to a DB-06 UNKNOWN rather than crashing with a KeyError.
+REQUIRED_COLUMNS = {
+    "grants": {"table_schema", "table_name", "privilege_type", "object_kind"},
+    "pii_columns": {"table_schema", "table_name", "column_name", "tier_floor"},
+    "masked_views": {"has_masking_signal"},
+    "audit_logging": {"name", "setting"},
+}
+
+
 def read_csv(path):
     if not path or not os.path.exists(path):
         return None
-    with open(path, encoding="utf-8", newline="") as f:
+    # utf-8-sig strips a leading BOM some clients prepend, which would otherwise corrupt the
+    # first column name.
+    with open(path, encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
 
 
@@ -67,7 +79,8 @@ def load_suppressions(target):
                 elif part.startswith("reason="):
                     reason = line.split("reason=", 1)[1]
             expired = False
-            if expires:
+            # `expires=` present but empty is malformed, not "no expiry" — fail closed.
+            if expires is not None:
                 try:
                     expired = datetime.date.fromisoformat(expires) < today
                 except ValueError:
@@ -116,14 +129,27 @@ def main():
     views = read_csv(args.views)
     settings = read_csv(args.settings)
 
-    for name, data in (("grants", grants), ("pii_columns", pii),
-                       ("masked_views", views), ("audit_logging", settings)):
+    tables = {"grants": grants, "pii_columns": pii,
+              "masked_views": views, "audit_logging": settings}
+    for name in ("grants", "pii_columns", "masked_views", "audit_logging"):
+        data = tables[name]
         if data is None:
             unknowns.append({
                 "check_id": "DB-06",
                 "reason": f"query output '{name}' missing — that part of the audit did not run.",
                 "action": "Re-run the pack query and re-evaluate; do not treat this as a pass.",
             })
+        elif data and not REQUIRED_COLUMNS[name].issubset(data[0].keys()):
+            missing = ", ".join(sorted(REQUIRED_COLUMNS[name] - set(data[0].keys())))
+            unknowns.append({
+                "check_id": "DB-06",
+                "reason": f"query output '{name}' has an unexpected schema (missing column(s): "
+                          f"{missing}) — that check did not run.",
+                "action": "Re-run the exact pack query; do not treat this as a pass.",
+            })
+            tables[name] = None  # fail closed: skip this table's checks rather than crash
+    grants, pii, views, settings = (tables["grants"], tables["pii_columns"],
+                                    tables["masked_views"], tables["audit_logging"])
 
     # DB-01 / DB-02 from grants
     if grants is not None:

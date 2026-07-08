@@ -7,6 +7,20 @@ cd "$(dirname "$0")/.." || exit 1
 fail=0
 step() { echo; echo "==> $1"; }
 
+# Portable bounded run: timeout (GNU/Linux) -> gtimeout (macOS coreutils) -> pure-shell poll.
+# Returns 124 if the command exceeds the deadline.
+run_bounded() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"; return $?; fi
+  if command -v gtimeout >/dev/null 2>&1; then gtimeout "$secs" "$@"; return $?; fi
+  "$@" & local pid=$! i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 1; i=$((i + 1))
+    if [ "$i" -ge "$secs" ]; then kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; return 124; fi
+  done
+  wait "$pid"
+}
+
 step "reference consistency: checks.yml -> citations.yml + fixtures"
 if ! jq -e --slurpfile cites reference/citations.yml '
     [.checks | to_entries[]
@@ -210,6 +224,79 @@ python3 skills/db-access-audit/scripts/eval_grants.py \
   --role ai_agent --principal-confirmed --ignore-dir "$DBSUP" --emit-json "$TMP/out.json"
 assert "DB-04 suppressed into appendix; other findings intact" \
   '(.findings | map(.check_id) | index("DB-04")) == null and (.suppressed | length == 1) and (.findings | length >= 3)'
+
+step "edge hardening: crash-resistance + value-leak regressions (from the bug hunt)"
+CLASSIFY_S="skills/data-classification/scripts/classify_hints.py"
+PERMEVAL_S="skills/ai-config-audit/scripts/permeval.py"
+GRANTS_S="skills/db-access-audit/scripts/eval_grants.py"
+
+# classify_hints: untraversable subdirectory -> DC-03 unknown, never a silent skip (blocker)
+EH="$TMP/eh-walkerr"; mkdir -p "$EH/secretsub"
+printf 'ssn,email\n123-45-6789,a@example.com\n' > "$EH/secretsub/hidden.csv"
+printf 'id\n1\n' > "$EH/ok.csv"
+chmod 000 "$EH/secretsub"
+python3 "$CLASSIFY_S" --target "$EH" --emit-json "$TMP/out.json"
+chmod 755 "$EH/secretsub"
+assert "unreadable subdir emits a DC-03 unknown (fail-closed, not a silent skip)" \
+  '.unknowns | any(.check_id == "DC-03" and (.reason | test("secretsub")))'
+
+# classify_hints: no raw field text leaks into pii_columns / evidence (blocker: value leak)
+EH2="$TMP/eh-leak"; mkdir -p "$EH2"
+printf 'row_id,medical note: patient Jane Q Public HIV+ policy#A1234567\n1,ok\n' > "$EH2/dump.csv"
+python3 "$CLASSIFY_S" --target "$EH2" --emit-json "$TMP/out.json"
+assert "free-text header field never captured as a column (no value leak)" \
+  '[tostring | test("Jane Q Public|HIV")] == [false]'
+
+# classify_hints: FIFO does not hang the scan (bounded by a short timeout here)
+EH3="$TMP/eh-fifo"; mkdir -p "$EH3"; mkfifo "$EH3/pipe" 2>/dev/null || true
+if [ -p "$EH3/pipe" ]; then
+  if run_bounded 15 python3 "$CLASSIFY_S" --target "$EH3" --emit-json "$TMP/out.json"; then
+    assert "FIFO surfaced as DC-03, scan did not hang" '.unknowns | any(.check_id == "DC-03")'
+  else
+    echo "FAIL: classify_hints hung or errored on a FIFO (exit $?)"; fail=1
+  fi
+fi
+
+# classify_hints: BOM UTF-16 text with a valid SSN is scanned, not filed Internal-binary
+EH4="$TMP/eh-utf16"; mkdir -p "$EH4"
+python3 - "$EH4/wide.txt" <<'PY'
+import sys
+open(sys.argv[1], "wb").write("account\nssn 078-05-1120\n".encode("utf-16"))
+PY
+python3 "$CLASSIFY_S" --target "$EH4" --emit-json "$TMP/out.json"
+assert "UTF-16 file with a valid SSN yields a Restricted DC-01 (not silent Internal)" \
+  '.findings | any(.check_id == "DC-01" and (.file | test("wide.txt")))'
+
+# permeval: malformed / hostile config shapes must not crash the audit (fail-open -> crash)
+EHP="$TMP/eh-perm"; mkdir -p "$EHP/.claude"
+printf '{"permissions": null}\n' > "$EHP/.claude/settings.json"
+printf '{"mcpServers": {"s": {"command": "x", "env": null}}}\n' > "$EHP/.mcp.json"
+mkdir -p "$EHP/.cursor"; printf '["not-an-object"]\n' > "$EHP/.cursor/mcp.json"
+EHHOME="$TMP/eh-perm-home"; mkdir -p "$EHHOME/.codex"
+mkdir -p "$EHHOME/.codex/config.toml"  # a DIRECTORY where a file is expected
+if python3 "$PERMEVAL_S" --target "$EHP" --home "$EHHOME" --emit-json "$TMP/out.json" 2>"$TMP/err"; then
+  assert "hostile configs still yield a well-formed run with the AC-06 unknown" \
+    '.unknowns | any(.check_id == "AC-06")'
+  assert "permissions:null still produces the AC-01 finding (did not crash out)" \
+    '.findings | any(.check_id == "AC-01")'
+else
+  echo "FAIL: permeval crashed on hostile config shapes:"; cat "$TMP/err"; fail=1
+fi
+
+# eval_grants: a present-but-malformed CSV fails closed to DB-06, does not KeyError-crash
+EHG="$TMP/eh-grants"; mkdir -p "$EHG/expected"
+printf 'wrong,header\na,b\n' > "$EHG/grants.csv"
+cp tests/fixtures/postgres/expected/pii_columns.csv "$EHG/pii.csv"
+cp tests/fixtures/postgres/expected/masked_views.csv "$EHG/views.csv"
+cp tests/fixtures/postgres/expected/audit_logging.csv "$EHG/settings.csv"
+if python3 "$GRANTS_S" --grants "$EHG/grants.csv" --pii "$EHG/pii.csv" \
+     --views "$EHG/views.csv" --settings "$EHG/settings.csv" \
+     --role ai_agent --principal-confirmed --emit-json "$TMP/out.json" 2>"$TMP/err"; then
+  assert "malformed grants.csv -> DB-06 unknown (fail closed, no crash)" \
+    '.unknowns | any(.check_id == "DB-06" and (.reason | test("grants")))'
+else
+  echo "FAIL: eval_grants crashed on a malformed CSV:"; cat "$TMP/err"; fail=1
+fi
 
 step "postgres pack (docker; self-skips when unavailable)"
 if ! tests/postgres-fixture-check.sh; then

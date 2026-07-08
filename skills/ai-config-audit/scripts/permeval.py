@@ -83,9 +83,11 @@ def check_deny_rules(target, findings):
     sources = []
     for rel in (".claude/settings.json", ".claude/settings.local.json"):
         settings = read_json(os.path.join(target, rel))
-        if settings is not None:
+        if isinstance(settings, dict):
             sources.append(rel)
-            deny += settings.get("permissions", {}).get("deny", [])
+            perms = settings.get("permissions")
+            if isinstance(perms, dict) and isinstance(perms.get("deny"), list):
+                deny += perms["deny"]
     missing = [r for r in RECOMMENDED_DENY if r not in deny]
     if missing:
         src = " and ".join(sources) if sources else "no .claude/settings*.json found"
@@ -108,9 +110,13 @@ def check_allow_rules(target, findings):
     """AC-02: allow rules that delegate arbitrary execution."""
     for rel in (".claude/settings.json", ".claude/settings.local.json"):
         settings = read_json(os.path.join(target, rel))
-        if settings is None:
+        if not isinstance(settings, dict):
             continue
-        for rule in settings.get("permissions", {}).get("allow", []):
+        perms = settings.get("permissions")
+        allow = perms.get("allow") if isinstance(perms, dict) else None
+        for rule in allow if isinstance(allow, list) else []:
+            if not isinstance(rule, str):
+                continue
             m = re.fullmatch(r"Bash\((.+)\)", rule.strip())
             if not m:
                 continue
@@ -143,7 +149,9 @@ def _scan_mcp_servers(servers, source_label, findings):
     for name, spec in servers.items():
         if not isinstance(spec, dict):
             continue
-        env = spec.get("env", {})
+        env = spec.get("env")
+        if not isinstance(env, dict):
+            env = {}
         suspects = [
             k for k, v in env.items()
             if isinstance(v, str) and v.strip()
@@ -200,33 +208,41 @@ def check_mcp_configs(target, home, findings):
     ]
     for path, label, key in candidates:
         data = read_json(path)
-        if data is not None:
+        # A config whose top-level JSON is an array/scalar (not an object) has no mcpServers
+        # to scan — skip it rather than crash on .get().
+        if isinstance(data, dict):
             _scan_mcp_servers(data.get(key, {}), label, findings)
 
     # Codex uses TOML ([mcp_servers.<name>] tables). Parse with tomllib when available
-    # (py3.11+); otherwise a line-based approximation that only reads key names.
+    # (py3.11+); otherwise a line-based approximation that only reads key names. A codex
+    # path that is a directory or holds invalid UTF-8 must be skipped, not crash the audit.
     codex = os.path.join(home, ".codex", "config.toml")
-    if os.path.exists(codex):
+    if os.path.isfile(codex):
         servers = {}
         try:
             import tomllib
             with open(codex, "rb") as f:
                 servers = {
-                    name: {"env": spec.get("env", {}), **spec}
+                    name: {"env": (spec.get("env") if isinstance(spec, dict) else {}) or {}, **spec}
                     for name, spec in tomllib.load(f).get("mcp_servers", {}).items()
+                    if isinstance(spec, dict)
                 }
         except Exception:
+            servers = {}
             current = None
-            with open(codex, encoding="utf-8") as f:
-                for line in f:
-                    m = re.match(r"\s*\[mcp_servers\.([^\].]+)", line)
-                    if m:
-                        current = m.group(1)
-                        servers.setdefault(current, {"env": {}})
-                        continue
-                    kv = re.match(r"\s*([A-Za-z0-9_-]+)\s*=\s*\"(.+)\"\s*$", line)
-                    if current and kv and SECRETY_KEY.search(kv.group(1)):
-                        servers[current]["env"][kv.group(1)] = kv.group(2)
+            try:
+                with open(codex, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        m = re.match(r"\s*\[mcp_servers\.([^\].]+)", line)
+                        if m:
+                            current = m.group(1)
+                            servers.setdefault(current, {"env": {}})
+                            continue
+                        kv = re.match(r"\s*([A-Za-z0-9_-]+)\s*=\s*\"(.+)\"\s*$", line)
+                        if current and kv and SECRETY_KEY.search(kv.group(1)):
+                            servers[current]["env"][kv.group(1)] = kv.group(2)
+            except OSError:
+                servers = {}
         _scan_mcp_servers(servers, "~/.codex/config.toml", findings)
 
 
@@ -273,7 +289,8 @@ def load_suppressions(target):
                 elif part.startswith("reason="):
                     reason = line.split("reason=", 1)[1]
             expired = False
-            if expires:
+            # `expires=` present but empty is malformed, not "no expiry" — fail closed.
+            if expires is not None:
                 try:
                     expired = datetime.date.fromisoformat(expires) < today
                 except ValueError:

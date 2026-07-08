@@ -42,20 +42,42 @@ for pattern, relpath, expected in CASES:
     if got is not expected:
         failures.append(f"deny_covers({pattern!r}, {relpath!r}) = {got}, expected {expected}")
 
-# Fail-closed expiry: an unparseable expires= must count as expired (finding resurfaces).
-with tempfile.TemporaryDirectory() as tmp:
-    with open(os.path.join(tmp, ".datawarden-ignore"), "w", encoding="utf-8") as f:
-        f.write("SS-03:.env:github-pat expires=not-a-date reason=bad expiry\n")
-        f.write("SS-01:x:y expires=2099-01-01 reason=valid future\n")
-    entries = eval_secrets.load_suppressions(tmp)
-    if not entries["SS-03:.env:github-pat"]["expired"]:
-        failures.append("malformed expires= did not fail closed (should count as expired)")
-    if entries["SS-01:x:y"]["expired"]:
-        failures.append("valid future expires= incorrectly treated as expired")
+# Fail-closed expiry: unparseable AND blank expires= must both count as expired.
+# Blank expires= (fail-open) was an edge-hardening finding — locked here across all evaluators.
+permeval = load("permeval", "skills/ai-config-audit/scripts/permeval.py")
+classify = load("classify_hints", "skills/data-classification/scripts/classify_hints.py")
+eval_grants = load("eval_grants", "skills/db-access-audit/scripts/eval_grants.py")
+
+for mod in (eval_secrets, permeval, classify, eval_grants):
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(os.path.join(tmp, ".datawarden-ignore"), "w", encoding="utf-8") as f:
+            f.write("X:a:b expires=not-a-date reason=malformed\n")
+            f.write("X:c:d expires= reason=blank fails open\n")
+            f.write("X:e:f expires=2099-01-01 reason=valid future\n")
+        e = mod.load_suppressions(tmp)
+        if not e["X:a:b"]["expired"]:
+            failures.append(f"{mod.__name__}: malformed expires= did not fail closed")
+        if not e["X:c:d"]["expired"]:
+            failures.append(f"{mod.__name__}: blank expires= failed OPEN (must fail closed)")
+        if e["X:e:f"]["expired"]:
+            failures.append(f"{mod.__name__}: valid future expires= wrongly expired")
+
+# ReDoS guard: the EMAIL regex must scan a long adversarial input in well under a second.
+import time  # noqa: E402
+adversarial = ("a" * 60000) + "@" + ("a" * 60000)
+t0 = time.perf_counter()
+classify.EMAIL.findall(adversarial)
+elapsed = time.perf_counter() - t0
+if elapsed > 1.0:
+    failures.append(f"EMAIL regex took {elapsed:.2f}s on adversarial input (ReDoS not fixed)")
+# ...and still matches real addresses
+for addr in ("a@example.com", "john.doe+tag@sub.example.co.uk"):
+    if not classify.EMAIL.search(addr):
+        failures.append(f"EMAIL regex no longer matches {addr}")
 
 if failures:
     print("MATCHER TESTS: FAIL")
     for f in failures:
         print("  " + f)
     sys.exit(1)
-print(f"MATCHER TESTS: PASS ({len(CASES)} glob cases + expiry fail-closed)")
+print(f"MATCHER TESTS: PASS ({len(CASES)} glob cases + expiry fail-closed x4 + ReDoS guard)")

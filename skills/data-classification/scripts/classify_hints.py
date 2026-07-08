@@ -22,6 +22,7 @@ import datetime
 import json
 import os
 import re
+import stat
 
 PLUGIN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SCHEMA_VERSION = 1
@@ -37,12 +38,15 @@ FILENAME_PATTERNS = [
 COLUMN_PATTERNS = [
     (re.compile(r"(?i)^(ssn|social_security(_number)?|tax_id|national_id|passport(_number)?)$"), "Restricted"),
     (re.compile(r"(?i)^(card_number|pan|cvv|account_number|routing_number)$"), "Restricted"),
-    (re.compile(r"(?i)^(dob|birth_date|date_of_birth|diagnosis|medical.*)$"), "Restricted"),
+    (re.compile(r"(?i)^(dob|birth_date|date_of_birth|diagnosis|medical[_a-z0-9]*)$"), "Restricted"),
     (re.compile(r"(?i)^(email|phone|mobile|address|first_name|last_name|full_name|ip_address)$"), "Confidential"),
     (re.compile(r"(?i)^(salary|income|compensation)$"), "Confidential"),
 ]
 
-EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+# Domain labels are dot-free (no overlap with the '.' separator) so this is linear, not
+# quadratic — a catastrophic-backtracking (ReDoS) hazard the '[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+# form had on long crafted inputs.
+EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b")
 SSN = re.compile(r"\b(\d{3})-(\d{2})-(\d{4})\b")
 PAN = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 
@@ -91,18 +95,35 @@ def classify_file(path, relpath):
             filename_hits.append(pattern.pattern)
             raise_floor(tier)
 
+    # Only read regular files. A FIFO/socket/device would make open() block forever
+    # (waiting on a writer) or misbehave — surface it as DC-03 rather than hang the scan.
+    try:
+        st = os.stat(path)
+    except OSError as e:
+        return {"path": relpath, "unreadable": True, "error": e.__class__.__name__}
+    if not stat.S_ISREG(st.st_mode):
+        return {"path": relpath, "unreadable": True, "error": "NotARegularFile"}
+
     try:
         with open(path, "rb") as f:
             raw = f.read(MAX_BYTES)
     except OSError as e:
         return {"path": relpath, "unreadable": True, "error": e.__class__.__name__}
-    if not looks_text(raw):
+
+    # Honor a byte-order mark so BOM-tagged UTF-16/UTF-8 text (which contains NUL bytes and
+    # would otherwise be misread as binary) is scanned for PII, not silently filed Internal.
+    encoding = "utf-8"
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        encoding = "utf-16"
+    elif raw[:3] == b"\xef\xbb\xbf":
+        encoding = "utf-8-sig"
+    if encoding == "utf-8" and not looks_text(raw):
         return {
             "path": relpath, "binary": True, "indicators": indicators,
             "pii_columns": pii_columns, "filename_hits": filename_hits, "floor": floor,
             "confidence": "possible",
         }
-    text = raw.decode("utf-8", errors="replace")
+    text = raw.decode(encoding, errors="replace")
 
     indicators["emails"] = len(EMAIL.findall(text))
     indicators["ssn_valid"] = sum(1 for m in SSN.finditer(text) if ssn_format_valid(m))
@@ -111,10 +132,15 @@ def classify_file(path, relpath):
     )
 
     # Header sniff for delimited files: match column names against the shared patterns.
+    # Only genuine column identifiers may ever enter pii_columns (which is echoed into the
+    # report) — never arbitrary field text. This is defense-in-depth so no future pattern can
+    # turn a free-text first line into a leaked data value in a shareable report.
     first_line = text.splitlines()[0] if text.splitlines() else ""
     if "," in first_line or "\t" in first_line:
         sep = "," if "," in first_line else "\t"
         for col in [c.strip().strip('"') for c in first_line.split(sep)]:
+            if not (len(col) <= 64 and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_ ]*", col)):
+                continue
             for pattern, tier in COLUMN_PATTERNS:
                 if pattern.match(col):
                     pii_columns.append(col)
@@ -168,7 +194,8 @@ def load_suppressions(target):
                 elif part.startswith("reason="):
                     reason = line.split("reason=", 1)[1]
             expired = False
-            if expires:
+            # `expires=` present but empty is malformed, not "no expiry" — fail closed.
+            if expires is not None:
                 try:
                     expired = datetime.date.fromisoformat(expires) < today
                 except ValueError:
@@ -231,7 +258,20 @@ def main():
     citations, checks = load_registry()
 
     files, unknowns = [], []
-    for root, dirs, names in os.walk(target):
+
+    def on_walk_error(err):
+        # A directory that cannot be listed/traversed (e.g. chmod 000) is otherwise dropped
+        # silently by os.walk — fail closed with a DC-03 so an unscanned subtree is never a
+        # clean bill of health.
+        bad = getattr(err, "filename", target)
+        unknowns.append({
+            "check_id": "DC-03",
+            "reason": f"'{os.path.relpath(bad, target)}' could not be traversed "
+                      f"({err.__class__.__name__}) — its contents are unclassified.",
+            "action": "Fix permissions and re-run; do not treat this subtree as a pass.",
+        })
+
+    for root, dirs, names in os.walk(target, onerror=on_walk_error):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for name in sorted(names):
             path = os.path.join(root, name)

@@ -180,7 +180,8 @@ def load_suppressions(target):
                 elif part.startswith("reason="):
                     reason = line.split("reason=", 1)[1]
             expired = False
-            if expires:
+            # `expires=` present but empty is malformed, not "no expiry" — fail closed.
+            if expires is not None:
                 try:
                     expired = datetime.date.fromisoformat(expires) < today
                 except ValueError:
@@ -194,7 +195,9 @@ def _relpath(file, target):
     """Normalize a gitleaks File field to target-relative: `gitleaks git` emits repo-relative
     paths, but `gitleaks dir <path>` emits absolute paths (verified against 8.30.1)."""
     if os.path.isabs(file):
-        return os.path.relpath(file, target)
+        # realpath both sides so a symlinked root (e.g. macOS /tmp -> /private/tmp) and the
+        # absolute paths gitleaks emits reconcile to one repo-relative key.
+        return os.path.relpath(os.path.realpath(file), os.path.realpath(target))
     return file
 
 
@@ -325,7 +328,7 @@ def main():
     parser.add_argument("--emit-json", help="write JSON here instead of stdout")
     args = parser.parse_args()
 
-    target = os.path.abspath(args.target)
+    target = os.path.realpath(os.path.abspath(args.target))
     checks = load_checks()
     citations = load_citations()
 
