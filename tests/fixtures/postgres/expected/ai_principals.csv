@@ -1,0 +1,3 @@
+rolname,rolcanlogin,rolsuper,rolbypassrls
+ai_agent,t,f,f
+postgres,t,t,t

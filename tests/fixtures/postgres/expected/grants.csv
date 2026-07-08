@@ -1,0 +1,7 @@
+grantee,table_schema,table_name,privilege_type,object_kind
+ai_agent,app,customers,INSERT,base table
+ai_agent,app,customers,SELECT,base table
+ai_agent,app,customers,UPDATE,base table
+ai_agent,app,orders,INSERT,base table
+ai_agent,app,orders,SELECT,base table
+ai_agent,app,orders,UPDATE,base table

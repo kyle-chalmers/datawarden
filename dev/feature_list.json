@@ -62,7 +62,7 @@
       "slice": "4a",
       "description": "db-access-audit Postgres pack verified against dockerized fixture; human gate works",
       "check": "docker Postgres + tests/fixtures/postgres/init.sql; every skills/db-access-audit/sql/postgres/*.sql output diffs clean against tests/fixtures/postgres/expected/; skill shows connection target + SQL and waits for confirmation before executing; reports over-broad grant, PII columns, no masked views, no audit logging",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S4b.1-db-audit-snowflake",

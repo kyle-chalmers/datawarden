@@ -143,5 +143,11 @@ assert "no data values leak into hint output (no SSN/PAN/email strings)" \
 assert "nothing is ever floored to Public" \
   '[.files[] | .floor != "Public"] | all'
 
+step "postgres pack (docker; self-skips when unavailable)"
+if ! tests/postgres-fixture-check.sh; then
+  echo "FAIL: postgres pack checks"
+  fail=1
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then echo "FIXTURES: PASS"; else echo "FIXTURES: FAIL"; exit 1; fi

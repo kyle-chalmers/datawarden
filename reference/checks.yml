@@ -84,6 +84,42 @@
       "title": "Classification could not run over part of the target (unreadable content)",
       "citations": ["nist-sp800-122"],
       "fixtures": ["manual-unreadable-target"]
+    },
+    "DB-01": {
+      "skill": "db-access-audit",
+      "title": "AI principal holds write privileges (INSERT/UPDATE/DELETE/TRUNCATE)",
+      "citations": ["owasp-llm06", "atlas-aml-t0053"],
+      "fixtures": ["postgres-fixture", "snowflake-recorded"]
+    },
+    "DB-02": {
+      "skill": "db-access-audit",
+      "title": "AI principal reads base tables directly instead of governed views",
+      "citations": ["owasp-llm06", "nist-sp800-122"],
+      "fixtures": ["postgres-fixture", "snowflake-recorded"]
+    },
+    "DB-03": {
+      "skill": "db-access-audit",
+      "title": "PII-named columns readable unmasked by the AI principal",
+      "citations": ["nist-sp800-122", "owasp-llm02", "atlas-aml-t0057"],
+      "fixtures": ["postgres-fixture", "snowflake-recorded"]
+    },
+    "DB-04": {
+      "skill": "db-access-audit",
+      "title": "No masked/governed view layer detected",
+      "citations": ["nist-sp800-122"],
+      "fixtures": ["postgres-fixture", "snowflake-recorded"]
+    },
+    "DB-05": {
+      "skill": "db-access-audit",
+      "title": "No audit trail of the AI principal's queries",
+      "citations": ["nist-ai-600-1"],
+      "fixtures": ["postgres-fixture", "snowflake-recorded"]
+    },
+    "DB-06": {
+      "skill": "db-access-audit",
+      "title": "DB audit could not run or principal unconfirmed (UNKNOWN / confidence cap)",
+      "citations": ["nist-sp800-122"],
+      "fixtures": ["postgres-fixture"]
     }
   }
 }

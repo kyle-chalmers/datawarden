@@ -1,0 +1,5 @@
+name,setting
+log_min_duration_statement,-1
+log_statement,none
+logging_collector,off
+shared_preload_libraries,
