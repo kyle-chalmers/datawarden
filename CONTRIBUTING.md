@@ -39,6 +39,12 @@ New work = new thin vertical slice with a runnable check, one atomic commit per 
 ## Releases
 
 The `version` field is intentionally absent while pre-release (git-SHA versioning). First public
-release adds synced semver + CHANGELOG + `claude plugin validate --strict`, and requires the
-maintainer's explicit approval — this repo does not publish or submit to any marketplace without
-it.
+release requires the maintainer's explicit approval — this repo does not publish or submit to
+any marketplace without it — and this checklist:
+
+1. Add synced semver to plugin.json + CHANGELOG; switch `dev/validate.sh` to
+   `claude plugin validate . --strict`.
+2. Remove the README "While this repo is private" install note (it documents a private-phase
+   workaround only).
+3. Enable GitHub private vulnerability reporting on the repo (SECURITY.md points there).
+4. Final gitleaks tree + full-history self-scan and a fresh clean-machine install test.

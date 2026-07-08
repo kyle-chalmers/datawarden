@@ -1,7 +1,7 @@
 {
   "$comment": "FIXTURE — deliberately misconfigured project settings for ai-config-audit tests. Empty deny list (AC-01) and an env-runner wildcard allow (AC-02).",
   "permissions": {
-    "allow": ["Bash(git status)", "Bash(npx *)"],
+    "allow": ["Bash(git status)", "Bash(npx *)", "Bash(uvx:*)"],
     "deny": []
   }
 }

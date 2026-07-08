@@ -115,8 +115,11 @@ def check_allow_rules(target, findings):
             if not m:
                 continue
             body = m.group(1).strip()
+            # Both wildcard spellings delegate the inner command: "npx *" and "npx:*".
+            has_wildcard = "*" in body
+            core = re.sub(r"(:\*|\s+\*.*)$", "", body).strip()
             for runner in ENV_RUNNERS:
-                if (body == runner or body.startswith(runner + " ")) and "*" in body:
+                if has_wildcard and (core == runner or core.startswith(runner + " ")):
                     findings.append(finding(
                         "AC-02",
                         f"Allow rule grants arbitrary execution via env-runner: {rule}",
@@ -274,7 +277,8 @@ def load_suppressions(target):
                 try:
                     expired = datetime.date.fromisoformat(expires) < today
                 except ValueError:
-                    expired = False
+                    # Fail closed: an unparseable expiry must not suppress forever.
+                    expired = True
             entries[fingerprint] = {"expires": expires, "reason": reason, "expired": expired}
     return entries
 

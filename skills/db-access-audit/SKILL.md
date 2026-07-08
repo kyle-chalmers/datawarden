@@ -65,8 +65,10 @@ reporting. This skill runs **inline** (not forked) because its human gate is a c
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/db-access-audit/scripts/eval_grants.py" \
      --grants <tmp>/grants.csv --pii <tmp>/pii_columns.csv \
      --views <tmp>/masked_views.csv --settings <tmp>/audit_logging.csv \
-     --role <role> [--principal-confirmed]
+     --role <role> [--principal-confirmed] --ignore-dir <dir>
    ```
+   `--ignore-dir` locates the `.datawarden-ignore` to honor: the current project root for live
+   runs, or the `--recorded` directory in air-gapped mode.
    Pass `--principal-confirmed` ONLY if step 2(b) was confirmed — otherwise verdicts cap at
    MEDIUM/possible by design. For snowflake, apply the interpretation rules in reference.md to
    the captured outputs, mapping to the same DB-01..DB-06 checks and the same confidence cap.

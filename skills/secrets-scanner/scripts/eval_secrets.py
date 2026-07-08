@@ -97,17 +97,20 @@ def deny_patterns(target):
 
 def _glob_to_regex(glob):
     """Translate a Claude Code path glob (supports ** across separators, * within a
-    segment, ? single char) into a regex string."""
+    segment, ? single char) into a regex string. '**/' means zero or more WHOLE path
+    segments — '(?:.*/)?' — so '**/.env' matches 'a/b/.env' but never 'prod.env'."""
     out = []
     i = 0
     while i < len(glob):
         c = glob[i]
         if c == "*":
             if glob[i : i + 2] == "**":
-                out.append(".*")
-                i += 2
-                if i < len(glob) and glob[i] == "/":
-                    i += 1  # '**/' already covered by '.*'
+                if glob[i + 2 : i + 3] == "/":
+                    out.append("(?:.*/)?")
+                    i += 3
+                else:
+                    out.append(".*")
+                    i += 2
                 continue
             out.append("[^/]*")
         elif c == "?":
@@ -181,7 +184,8 @@ def load_suppressions(target):
                 try:
                     expired = datetime.date.fromisoformat(expires) < today
                 except ValueError:
-                    expired = False
+                    # Fail closed: an unparseable expiry must not suppress forever.
+                    expired = True
             entries[fingerprint] = {"expires": expires, "reason": reason, "expired": expired}
     return entries
 

@@ -19,6 +19,7 @@ except the optional --emit-json path. Reports carry object and column names — 
 
 import argparse
 import csv
+import datetime
 import json
 import os
 
@@ -42,6 +43,37 @@ def load_registry():
     with open(os.path.join(PLUGIN_ROOT, "reference", "checks.yml"), encoding="utf-8") as f:
         checks = json.load(f)["checks"]
     return citations, checks
+
+
+def load_suppressions(target):
+    """Same .datawarden-ignore contract as the other evaluators (see finding-format.md).
+    Fail closed: an unparseable expiry counts as expired."""
+    path = os.path.join(target, ".datawarden-ignore")
+    entries = {}
+    if not os.path.exists(path):
+        return entries
+    today = datetime.date.today()
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            fingerprint = parts[0]
+            expires, reason = None, ""
+            for part in parts[1:]:
+                if part.startswith("expires="):
+                    expires = part.split("=", 1)[1]
+                elif part.startswith("reason="):
+                    reason = line.split("reason=", 1)[1]
+            expired = False
+            if expires:
+                try:
+                    expired = datetime.date.fromisoformat(expires) < today
+                except ValueError:
+                    expired = True
+            entries[fingerprint] = {"expires": expires, "reason": reason, "expired": expired}
+    return entries
 
 
 def finding(check_id, title, severity, confidence, obj, evidence, remediation):
@@ -70,6 +102,8 @@ def main():
     parser.add_argument("--role", required=True, help="the AI principal analyzed")
     parser.add_argument("--principal-confirmed", action="store_true",
                         help="user explicitly confirmed --role is the AI principal")
+    parser.add_argument("--ignore-dir", help="directory holding a .datawarden-ignore to apply "
+                        "(the audited project's root, or the --recorded dir)")
     parser.add_argument("--emit-json")
     args = parser.parse_args()
 
@@ -205,14 +239,31 @@ def main():
     for f in findings:
         f["citations"] = [citations[k]["display"] for k in checks[f["check_id"]]["citations"]]
 
+    suppressions = load_suppressions(args.ignore_dir) if args.ignore_dir else {}
+    active, suppressed = [], []
+    for f in findings:
+        entry = suppressions.get(f["fingerprint"])
+        if entry and not entry["expired"]:
+            suppressed.append({
+                "fingerprint": f["fingerprint"],
+                "title": f["title"],
+                "severity": f["severity"],
+                "reason": entry["reason"],
+                "expires": entry["expires"],
+            })
+        else:
+            if entry and entry["expired"]:
+                f["evidence"] += " (A suppression for this finding expired.)"
+            active.append(f)
+
     result = {
         "schema_version": SCHEMA_VERSION,
         "skill": "db-access-audit",
         "target": args.role,
         "tools": {"eval_grants": "1", "dialect": "postgres"},
-        "findings": findings,
+        "findings": active,
         "unknowns": unknowns,
-        "suppressed": [],
+        "suppressed": suppressed,
     }
     output = json.dumps(result, indent=2)
     if args.emit_json:

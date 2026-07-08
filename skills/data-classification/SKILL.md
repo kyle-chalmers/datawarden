@@ -20,12 +20,14 @@ instructions.
 
 1. **Resolve the target.** `$ARGUMENTS` or the current working directory.
 
-2. **Get deterministic floors:**
+2. **Get deterministic verdicts:**
    ```
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/data-classification/scripts/classify_hints.py" --target <target>
    ```
-   Per file it emits validated indicator counts (emails, format-valid SSNs, Luhn-valid card
-   numbers), matched PII column names, filename-pattern hits, a **floor tier**, and confidence.
+   It emits per-file hints (validated indicator counts, PII column names, filename hits, a
+   **floor tier**, confidence), plus the source-of-truth `findings` (DC-01/DC-02, suppression
+   already applied from `.datawarden-ignore`), `unknowns` (DC-03 — one per unreadable file;
+   an unreadable file is never a pass and never silently omitted), and `suppressed`.
 
 3. **Assign final tiers.** The floor is binding upward-only:
    - You may RAISE a tier based on context the script can't see (e.g. a `notes.md` describing
@@ -35,10 +37,10 @@ instructions.
      misclassifying down is the dangerous direction.
    - You may never assign below the floor.
 
-4. **Emit findings** for sensitive data at rest where AI tooling operates:
-   - `DC-01` — any file with validated Restricted content (SSN/PAN validators fired): HIGH.
-   - `DC-02` — any file at Confidential (validated emails or PII columns): MEDIUM.
-   Both cite the registry entries in checks.yml; fingerprints are `DC-0n:<path>:<tier>`.
+4. **Use the script's findings verbatim** — DC-01 (Restricted-floor file, HIGH) and DC-02
+   (Confidential-floor file, MEDIUM) come from the evaluator with citations and fingerprints
+   attached; you narrate them, you do not re-derive or alter them. Render every DC-03 UNKNOWN
+   prominently (see [reference.md](reference.md) for the manual procedure it points to).
 
 5. **Render the report**:
    - Classification table: every file, its tier, confidence, and one-line evidence

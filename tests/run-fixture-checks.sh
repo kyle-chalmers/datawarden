@@ -106,6 +106,8 @@ assert "AC-01: all 3 recommended deny rules reported missing" \
   '.findings | any(.check_id == "AC-01" and (.title | test("Missing 3")) and .severity == "HIGH")'
 assert "AC-02: Bash(npx *) flagged as env-runner allow" \
   '.findings | any(.check_id == "AC-02" and (.title | test("npx")) and .severity == "HIGH")'
+assert "AC-02: colon-wildcard spelling Bash(uvx:*) also flagged" \
+  '.findings | any(.check_id == "AC-02" and (.title | test("uvx")))'
 assert "AC-03: credential-shaped MCP env key flagged by name" \
   '.findings | any(.check_id == "AC-03" and (.evidence | test("WAREHOUSE_PASSWORD")))'
 assert "AC-03: the placeholder value itself never appears in output" \
@@ -130,6 +132,9 @@ assert "hardened config: AC-06 unknown still present (never a clean bill)" \
 
 CLASSIFY="skills/data-classification/scripts/classify_hints.py"
 
+step "matcher unit tests (permission globs + fail-closed expiry)"
+if ! python3 tests/test_matchers.py; then fail=1; fi
+
 step "fixture classify-repo: deterministic floors, validators, no values in output"
 python3 "$CLASSIFY" --target tests/fixtures/classify-repo --emit-json "$TMP/out.json"
 assert "accounts.csv floors to Restricted, confirmed, via SSN + Luhn validators" \
@@ -142,6 +147,49 @@ assert "no data values leak into hint output (no SSN/PAN/email strings)" \
   '[tostring | test("078-05-1120|4111111111111111|jane\\.doe@example\\.com")] == [false]'
 assert "nothing is ever floored to Public" \
   '[.files[] | .floor != "Public"] | all'
+assert "DC-01 finding emitted for accounts.csv (HIGH, confirmed, cited)" \
+  '.findings | any(.check_id == "DC-01" and .file == "accounts.csv" and .severity == "HIGH" and .confidence == "confirmed" and (.citations | length > 0))'
+assert "DC-02 finding emitted for customers.csv (MEDIUM)" \
+  '.findings | any(.check_id == "DC-02" and .file == "customers.csv" and .severity == "MEDIUM")'
+
+step "classification DC-03: unreadable file becomes an UNKNOWN, never a silent skip"
+DCDIR="$TMP/dc-unreadable"
+mkdir -p "$DCDIR"
+echo "readable" > "$DCDIR/ok.txt"
+echo "hidden" > "$DCDIR/locked.txt"
+chmod 000 "$DCDIR/locked.txt"
+if [ -r "$DCDIR/locked.txt" ]; then
+  echo "SKIP: running as root (chmod 000 still readable) — DC-03 check skipped"
+else
+  python3 "$CLASSIFY" --target "$DCDIR" --emit-json "$TMP/out.json"
+  assert "DC-03 unknown names the unreadable file" \
+    '.unknowns | any(.check_id == "DC-03" and (.reason | test("locked.txt")))'
+  assert "unreadable file absent from the classification table" \
+    '[.files[] | .path] | index("locked.txt") == null'
+fi
+chmod 644 "$DCDIR/locked.txt" 2>/dev/null || true
+
+step "classification suppression: .datawarden-ignore moves DC finding to appendix"
+DCSUP="$TMP/dc-suppress"
+mkdir -p "$DCSUP"
+cp tests/fixtures/classify-repo/accounts.csv "$DCSUP/"
+printf 'DC-01:accounts.csv:Restricted reason=fixture test\n' > "$DCSUP/.datawarden-ignore"
+python3 "$CLASSIFY" --target "$DCSUP" --emit-json "$TMP/out.json"
+assert "DC-01 suppressed into appendix" \
+  '(.findings | map(.check_id) | index("DC-01")) == null and (.suppressed | length == 1)'
+
+step "db-access-audit suppression via --ignore-dir (recorded CSVs, no docker)"
+DBSUP="$TMP/db-suppress"
+mkdir -p "$DBSUP"
+printf 'DB-04:views:db reason=fixture test\n' > "$DBSUP/.datawarden-ignore"
+python3 skills/db-access-audit/scripts/eval_grants.py \
+  --grants tests/fixtures/postgres/expected/grants.csv \
+  --pii tests/fixtures/postgres/expected/pii_columns.csv \
+  --views tests/fixtures/postgres/expected/masked_views.csv \
+  --settings tests/fixtures/postgres/expected/audit_logging.csv \
+  --role ai_agent --principal-confirmed --ignore-dir "$DBSUP" --emit-json "$TMP/out.json"
+assert "DB-04 suppressed into appendix; other findings intact" \
+  '(.findings | map(.check_id) | index("DB-04")) == null and (.suppressed | length == 1) and (.findings | length >= 3)'
 
 step "postgres pack (docker; self-skips when unavailable)"
 if ! tests/postgres-fixture-check.sh; then

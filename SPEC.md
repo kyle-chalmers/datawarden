@@ -34,7 +34,8 @@ Every finding cites a recognized standard. IMPLEMENT flows (human-gated fixes) a
   fail-closed, never counted as a pass). **Confidence caps severity**: `possible ≤ MEDIUM`,
   `probable ≤ HIGH`, only `confirmed` may be `CRITICAL`.
 - **`citations.yml`** — the ONLY citation IDs findings may use, each with a source URL
-  (OWASP LLM Top 10 2025, MITRE ATLAS, MCP Security Best Practices, NIST SP 800-122, NIST AI 600-1).
+  (OWASP LLM Top 10 2025, MITRE ATLAS, MCP Security Best Practices, NIST SP 800-122,
+  NIST AI 600-1, and the Claude Code data-usage/security docs for tool-specific checks).
 - **`checks.yml`** — maps every check to its citation keys and the fixture that proves it fires
   (CI-enforced: a check without a citation or fixture fails the build).
 - **`four-tier-framework.md`** — tier definitions based on NIST SP 800-122 impact levels, plus the
