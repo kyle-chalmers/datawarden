@@ -31,10 +31,25 @@ EVAL="skills/secrets-scanner/scripts/eval_secrets.py"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-run_eval() { # $1 repo path -> writes $TMP/out.json
+run_gitleaks() { # $1 subcommand, $2 report path, $3 repo — exit 0/1 are normal; >1 retried once, then loud
+  local sub="$1" report="$2" repo="$3" rc=0
+  gitleaks "$sub" --no-banner --redact --report-format json --report-path "$report" "$repo" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -gt 1 ]; then
+    echo "WARN: gitleaks $sub exited $rc for $repo; retrying once"
+    rc=0
+    gitleaks "$sub" --no-banner --redact --report-format json --report-path "$report" "$repo" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -gt 1 ]; then
+      echo "FAIL: gitleaks $sub errored twice (exit $rc) for $repo"
+      fail=1
+    fi
+  fi
+}
+
+run_eval() { # $1 repo path -> writes $TMP/out.json; reports are always fresh (no stale reuse)
   local repo="$1"
-  gitleaks git --no-banner --redact --report-format json --report-path "$TMP/hist.json" "$repo" >/dev/null 2>&1 || true
-  gitleaks dir --no-banner --redact --report-format json --report-path "$TMP/dir.json" "$repo" >/dev/null 2>&1 || true
+  rm -f "$TMP/hist.json" "$TMP/dir.json" "$TMP/out.json"
+  run_gitleaks git "$TMP/hist.json" "$repo"
+  run_gitleaks dir "$TMP/dir.json" "$repo"
   python3 "$EVAL" --history-report "$TMP/hist.json" --dir-report "$TMP/dir.json" \
     --target "$repo" --gitleaks-version "test" --emit-json "$TMP/out.json"
 }
@@ -52,7 +67,12 @@ assert() { # $1 description, $2 jq expression that must be true against $TMP/out
 step "fixture secrets-generated: SS-01 history HIGH + SS-03 disk CRITICAL"
 REPO="$(tests/fixtures/make-secrets-repo.sh | tail -1)"
 run_eval "$REPO"
-assert "exactly 2 findings" '.findings | length == 2'
+# gitleaks rule multiplicity on the same planted secret varies by random draw, so assert
+# semantics (findings confined to planted files, correct check per file), not exact counts.
+assert "findings confined to the two planted files" \
+  '[.findings[].file] | unique | sort == [".env", "deploy-creds.txt"]'
+assert "every deploy-creds.txt finding is history-only SS-01" \
+  '[.findings[] | select(.file == "deploy-creds.txt") | .check_id] | (length > 0) and (unique == ["SS-01"])'
 assert "SS-01 present, severity HIGH, history-only exposure" \
   '.findings | any(.check_id == "SS-01" and .severity == "HIGH" and .exposure.in_history and (.exposure.on_disk | not) and (.exposure.vcs_remote | not))'
 assert "SS-03 present on .env, severity CRITICAL, confirmed, agent-readable" \

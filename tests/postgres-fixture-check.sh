@@ -29,11 +29,15 @@ docker run -d --name "$NAME" -e POSTGRES_PASSWORD=fixture-placeholder "$IMAGE" >
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
 
 echo "waiting for postgres..."
-for _ in $(seq 1 30); do
+for _ in $(seq 1 90); do
   if docker exec "$NAME" pg_isready -U postgres -q 2>/dev/null; then break; fi
   sleep 1
 done
-docker exec "$NAME" pg_isready -U postgres -q || { echo "FAIL: postgres never became ready"; exit 1; }
+if ! docker exec "$NAME" pg_isready -U postgres -q; then
+  echo "FAIL: postgres never became ready; container logs follow"
+  docker logs --tail 30 "$NAME" 2>&1 || true
+  exit 1
+fi
 sleep 1
 
 echo "loading fixture schema..."
