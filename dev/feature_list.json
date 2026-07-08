@@ -76,7 +76,7 @@
       "slice": "5",
       "description": "security-audit orchestrator produces one merged, deduped, cited report end-to-end",
       "check": "/datawarden:security-audit over combined fixtures -> single report with all 4 sub-audit sections, deduplicated .env finding, Top-5 actions ordered severity-first with rotate-pushed-secrets override, every finding cited",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S6.1-ship-polish",
