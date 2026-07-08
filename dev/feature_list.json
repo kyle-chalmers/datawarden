@@ -83,7 +83,7 @@
       "slice": "6",
       "description": "README/SECURITY/CONTRIBUTING complete; real install path works; repo provably clean",
       "check": "claude plugin marketplace add kyle-chalmers/datawarden && claude plugin install datawarden@datawarden succeeds from a clean checkout; gitleaks tree+history self-scan clean; CI green",
-      "passes": false
+      "passes": true
     }
   ]
 }
