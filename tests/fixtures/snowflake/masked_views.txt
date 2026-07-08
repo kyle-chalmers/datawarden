@@ -1,0 +1,14 @@
+-- FIXTURE: recorded output of `snow sql -D "db=ANALYTICS" -f masked_views.sql`.
+-- Statement 1: SHOW MASKING POLICIES IN ACCOUNT
++------------+------+---------------+-------+
+| created_on | name | database_name | owner |
+|------------+------+---------------+-------|
++------------+------+---------------+-------+
+0 Row(s) produced.
+
+-- Statement 2: SHOW VIEWS IN DATABASE ANALYTICS
++------------+------+---------------+-------------+-------+
+| created_on | name | database_name | schema_name | owner |
+|------------+------+---------------+-------------+-------|
++------------+------+---------------+-------------+-------+
+0 Row(s) produced.

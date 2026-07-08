@@ -1,0 +1,12 @@
+-- FIXTURE: recorded output of `snow sql -D "role=AI_AGENT" -f grants.sql` against a
+-- deliberately misconfigured demo account. Values are invented; shapes mirror SHOW GRANTS.
++-------------------------------+-----------+------------+-------------------------+------------+--------------+--------------+------------+
+| created_on                    | privilege | granted_on | name                    | granted_to | grantee_name | grant_option | granted_by |
+|-------------------------------+-----------+------------+-------------------------+------------+--------------+--------------+------------|
+| 2026-05-01 09:00:00.000 -0700 | USAGE     | DATABASE   | ANALYTICS               | ROLE       | AI_AGENT     | false        | SYSADMIN   |
+| 2026-05-01 09:00:01.000 -0700 | USAGE     | SCHEMA     | ANALYTICS.APP           | ROLE       | AI_AGENT     | false        | SYSADMIN   |
+| 2026-05-01 09:00:02.000 -0700 | SELECT    | TABLE      | ANALYTICS.APP.CUSTOMERS | ROLE       | AI_AGENT     | false        | SYSADMIN   |
+| 2026-05-01 09:00:03.000 -0700 | INSERT    | TABLE      | ANALYTICS.APP.CUSTOMERS | ROLE       | AI_AGENT     | false        | SYSADMIN   |
+| 2026-05-01 09:00:04.000 -0700 | UPDATE    | TABLE      | ANALYTICS.APP.CUSTOMERS | ROLE       | AI_AGENT     | false        | SYSADMIN   |
+| 2026-05-01 09:00:05.000 -0700 | SELECT    | TABLE      | ANALYTICS.APP.ORDERS    | ROLE       | AI_AGENT     | false        | SYSADMIN   |
++-------------------------------+-----------+------------+-------------------------+------------+--------------+--------------+------------+

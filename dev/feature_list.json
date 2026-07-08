@@ -69,7 +69,7 @@
       "slice": "4b",
       "description": "db-access-audit Snowflake pack interprets recorded fixtures into expected findings",
       "check": "skill maps tests/fixtures/snowflake/ recorded outputs to the findings in tests/fixtures/snowflake/expected_findings.md without a live account; CI lint proves zero mutating statements in both SQL packs",
-      "passes": false
+      "passes": true
     },
     {
       "id": "S5.1-orchestrator",

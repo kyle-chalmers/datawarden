@@ -1,0 +1,9 @@
+-- FIXTURE: recorded output of `snow sql -D "db=ANALYTICS" -f pii_columns.sql`.
++--------------+------------+-------------+-----------+--------------+
+| TABLE_SCHEMA | TABLE_NAME | COLUMN_NAME | DATA_TYPE | TIER_FLOOR   |
+|--------------+------------+-------------+-----------+--------------|
+| APP          | CUSTOMERS  | CARD_NUMBER | TEXT      | Restricted   |
+| APP          | CUSTOMERS  | EMAIL       | TEXT      | Confidential |
+| APP          | CUSTOMERS  | FULL_NAME   | TEXT      | Confidential |
+| APP          | CUSTOMERS  | SSN         | TEXT      | Restricted   |
++--------------+------------+-------------+-----------+--------------+

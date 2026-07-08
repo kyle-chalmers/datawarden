@@ -1,6 +1,6 @@
 ---
 description: Read-only warehouse audit for AI access risk — over-broad grants held by the AI principal, unmasked PII columns, missing masked-view layer, missing audit logging. Postgres (live) and Snowflake (recorded/live) SQL packs. Human-gated; connects via your own pre-authenticated psql/snow; never stores credentials.
-argument-hint: "--dialect postgres|snowflake --connection <conninfo-or-name> --role <ai-role> [--confirm]"
+argument-hint: "--dialect postgres|snowflake --connection <conninfo-or-name> --role <ai-role> [--confirm] [--recorded <dir>]"
 allowed-tools: "Bash(psql *), Bash(snow *), Bash(python3 *), Bash(mktemp *), Read, Glob"
 ---
 
@@ -28,8 +28,15 @@ reporting. This skill runs **inline** (not forked) because its human gate is a c
 
 1. **Parse arguments** from `$ARGUMENTS`: `--dialect` (postgres|snowflake), `--connection`
    (psql conninfo/URL or snow connection name), `--role` (the AI principal to analyze),
-   optional `--confirm`. Ask for whatever is missing. If the user doesn't know the AI role,
-   offer to run only `ai_principals.sql` first so they can identify it.
+   optional `--confirm`, optional `--recorded <dir>`. Ask for whatever is missing. If the user
+   doesn't know the AI role, offer to run only `ai_principals.sql` first so they can identify it.
+
+   **`--recorded <dir>` = air-gapped mode**: instead of connecting, read previously captured
+   query outputs from `<dir>` (one file per pack query: `grants.csv`/`.txt`, `pii_columns.*`,
+   `masked_views.*`, `audit_logging.*`, `ai_principals.*`). No connection, no gate step 2(a) —
+   nothing touches a database — but principal confirmation 2(b) still applies. This is how
+   locked-down environments use the skill (a DBA captures outputs, the analyst audits them),
+   and how the Snowflake fixtures are validated.
 
 2. **THE GATE — before touching the database.** Show the user, in one block:
    - the dialect and the redacted connection target,
