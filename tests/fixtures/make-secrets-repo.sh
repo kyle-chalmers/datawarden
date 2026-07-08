@@ -15,9 +15,10 @@
 set -euo pipefail
 
 # tr reads /dev/urandom forever; head closing the pipe sends tr SIGPIPE, which pipefail
-# would turn into exit 141 — hence the || true.
+# would turn into exit 141 — hence the || true. GNU tr also prints "write error: Broken
+# pipe" on that signal, hence the 2>/dev/null.
 rand() { # $1 charset, $2 length
-  LC_ALL=C tr -dc "$1" </dev/urandom | head -c "$2" || true
+  { LC_ALL=C tr -dc "$1" 2>/dev/null </dev/urandom | head -c "$2"; } || true
 }
 
 MODE="base"
